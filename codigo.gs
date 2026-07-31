@@ -1,7 +1,3 @@
-/**
- * Evento disparado automáticamente al abrir la hoja de cálculo.
- * Crea un menú personalizado en la barra superior.
- */
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu(' Dashboard Docentes')
@@ -9,9 +5,6 @@ function onOpen() {
     .addToUi();
 }
 
-/**
- * Despliega la interfaz lateral (Sidebar) construida desde el archivo 'PanelDocentes.html'.
- */
 function abrirPanelDocentes() {
   var html = HtmlService.createHtmlOutputFromFile('PanelDocentes')
       .setTitle('Gestión y Cumplimiento Docente')
@@ -23,20 +16,15 @@ function abrirPanelDocentes() {
 // 1. CONVERSIÓN Y CLAVE ÚNICA DE FECHA
 // ==========================================
 
-/**
- * Convierte un valor de celda (fecha nativa o texto) a un objeto Date estandarizado sin horas.
- * @param {any} valor - Contenido de la celda.
- * @returns {Date|null} Objeto Date parseado o null si es inválido.
- */
 function convertirFecha(valor) {
   if (!valor) return null;
 
-  // Caso A: Si ya es un objeto Date válido de JavaScript
+  // Caso A: Objeto Date nativo
   if (Object.prototype.toString.call(valor) === "[object Date]" && !isNaN(valor.getTime())) {
     return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
   }
 
-  // Caso B: Cadena de texto (ej. "DD/MM/YYYY", "YYYY-MM-DD", "DD.MM.YYYY")
+  // Caso B: Cadena de texto (Día/Mes/Año o Año-Mes-Día)
   var texto = String(valor).trim();
   if (!texto) return null;
 
@@ -45,7 +33,6 @@ function convertirFecha(valor) {
 
   var dia, mes, anio;
 
-  // Determina el formato según la longitud del primer segmento (Año primero vs Día primero)
   if (partes[0].length === 4) {
     anio = Number(partes[0]);
     mes  = Number(partes[1]);
@@ -58,10 +45,8 @@ function convertirFecha(valor) {
 
   if (isNaN(dia) || isNaN(mes) || isNaN(anio)) return null;
 
-  // Construye la fecha (los meses en JS van de 0 a 11)
   var fecha = new Date(anio, mes - 1, dia);
 
-  // Valida que los valores ingresados correspondan a una fecha real (ej. evita 31/02)
   if (
     fecha.getFullYear() !== anio ||
     fecha.getMonth() + 1 !== mes ||
@@ -73,21 +58,11 @@ function convertirFecha(valor) {
   return fecha;
 }
 
-/**
- * Convierte una fecha a formato estándar "YYYY-MM-DD" para comparaciones precisas.
- * @param {Date} fecha - Objeto fecha.
- * @returns {string} Cadena formateada.
- */
 function claveFecha(fecha) {
   if (!fecha) return "";
   return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
-/**
- * Recorre la columna A para encontrar la fecha válida más reciente (máximo valor de timestamp).
- * @param {Array<Array>} data - Matriz de datos obtenida del Spreadsheet.
- * @returns {Date|null} La fecha más reciente encontrada.
- */
 function obtenerFechaMasReciente(data) {
   var ultimaFecha = null;
   var ultimoTiempo = -Infinity;
@@ -106,11 +81,6 @@ function obtenerFechaMasReciente(data) {
   return ultimaFecha;
 }
 
-/**
- * Filtra la hoja de cálculo devolviendo únicamente las filas cuya fecha coincida con la más reciente.
- * @param {Array<Array>} data - Matriz completa de datos.
- * @returns {Array<Array>} Filas filtradas por la cohorte más reciente.
- */
 function obtenerFilasFechaMasReciente(data) {
   var ultimaFecha = obtenerFechaMasReciente(data);
   if (!ultimaFecha) return [];
@@ -129,18 +99,12 @@ function obtenerFilasFechaMasReciente(data) {
   return resultado;
 }
 
-/**
- * Convierte cualquier representación de porcentaje (ej. "85%", 0.85, " 85 ") a un entero limpio.
- * @param {any} val - Valor raw de la celda.
- * @returns {number} Porcentaje entero normalizado.
- */
 function parsearPorcentaje(val) {
   if (val === null || val === undefined) return 0;
   var str = String(val).replace("%", "").trim();
   var num = parseFloat(str);
   if (isNaN(num)) return 0;
 
-  // Ajusta escala si viene formateado en base decimal (ej: 0.85 -> 85)
   if (num <= 1 && num > 0) {
     num = num * 100;
   }
@@ -151,10 +115,6 @@ function parsearPorcentaje(val) {
 // 2. CONSULTAS DE DATOS PARA PANEL
 // ==========================================
 
-/**
- * Obtiene la lista ordenada de nombres de docentes activos en la cohorte más reciente.
- * @returns {Array<string>} Arreglo con nombres únicos de docentes.
- */
 function obtenerListaDocentes() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
@@ -164,10 +124,9 @@ function obtenerListaDocentes() {
 
   for (var i = 0; i < filasRecientes.length; i++) {
     var fila = filasRecientes[i];
-    var nombreDocente = fila[3]; // Columna D (Docente)
-    var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K (Nivel/Meta)
+    var nombreDocente = fila[3]; // Columna D
+    var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K
 
-    // Solo incluye docentes con metas válidas asignadas
     if (nombreDocente && nivel !== 'sin meta asignada') {
       docentes.add(nombreDocente);
     }
@@ -176,11 +135,6 @@ function obtenerListaDocentes() {
   return Array.from(docentes).sort();
 }
 
-/**
- * Extrae las asignaturas y cálculo de actividades faltantes de un docente específico en la última cohorte.
- * @param {string} nombreDocente - Nombre del docente a consultar.
- * @returns {Array<Object>} Arreglo de objetos con el detalle de cada materia/clase.
- */
 function obtenerDetalleDocente(nombreDocente) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
@@ -194,24 +148,23 @@ function obtenerDetalleDocente(nombreDocente) {
     var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K
 
     if (docenteFila === nombreDocente && nivel !== 'sin meta asignada') {
-      var porcentaje = parsearPorcentaje(fila[12]); // Columna M (% Cumplimiento)
+      var porcentaje = parsearPorcentaje(fila[12]); // Columna M
 
       var faltaLibro = 0;
       var faltaPropia = 0;
       var faltaMuro = 0;
 
-      // Si no ha llegado al 100%, calcula exactamente cuántas actividades restan
       if (porcentaje < 100) {
-        var metaLibro = Number(fila[14]) || 0;   // Columna O (Meta Libro)
-        var totalLibro = Number(fila[15]) || 0;  // Columna P (Total Libro)
+        var metaLibro = Number(fila[14]) || 0;   // Columna O
+        var totalLibro = Number(fila[15]) || 0;  // Columna P
         faltaLibro = Math.max(0, metaLibro - totalLibro);
 
-        var metaPropia = Number(fila[17]) || 0;  // Columna R (Meta Propia)
-        var totalPropia = Number(fila[18]) || 0; // Columna S (Total Propia)
+        var metaPropia = Number(fila[17]) || 0;  // Columna R
+        var totalPropia = Number(fila[18]) || 0; // Columna S
         faltaPropia = Math.max(0, metaPropia - totalPropia);
 
-        var metaMuro = Number(fila[20]) || 0;    // Columna U (Meta Muro)
-        var totalMuro = Number(fila[21]) || 0;   // Columna V (Total Muro)
+        var metaMuro = Number(fila[20]) || 0;    // Columna U
+        var totalMuro = Number(fila[21]) || 0;   // Columna V
         faltaMuro = Math.max(0, metaMuro - totalMuro);
       }
 
@@ -230,13 +183,6 @@ function obtenerDetalleDocente(nombreDocente) {
   return resultados;
 }
 
-/**
- * Envía un correo electrónico HTML al docente.
- * @param {string} destinatario - Correo del docente.
- * @param {string} asunto - Asunto del correo.
- * @param {string} mensaje - Cuerpo del mensaje en formato texto/HTML.
- * @returns {Object} Estado del envío.
- */
 function enviarCorreoDocente(destinatario, asunto, mensaje) {
   try {
     MailApp.sendEmail({
@@ -253,13 +199,7 @@ function enviarCorreoDocente(destinatario, asunto, mensaje) {
 // ==========================================
 // 3. GENERACIÓN DE PDF
 // ==========================================
-
-/**
- * Genera el reporte oficial en PDF para un docente con sanitización numérica estricta,
- * promedio por materias, diseño HTML/CSS y footer con fecha de cohorte.
- * @param {string} nombreDocente - Nombre del docente.
- * @returns {Object} Objeto conteniendo el PDF codificado en Base64 y su nombre de archivo.
- */
+// Genera el reporte PDF asegurando extracción numérica limpia para el promedio
 function generarPDFDocente(nombreDocente) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
@@ -271,50 +211,52 @@ function generarPDFDocente(nombreDocente) {
     throw new Error('No se encontraron registros recientes para el docente.');
   }
 
-  // 1. Determina las fechas a mostrar (Cohorte de la Hoja vs Fecha actual de emisión)
+  // Fecha de Cohorte filtrada
   var fechaCohorte = fechaMasRecienteObj 
     ? Utilities.formatDate(fechaMasRecienteObj, Session.getScriptTimeZone(), "dd/MM/yyyy")
     : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
 
   var fechaHoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
 
-  // 2. Sanitización numérica y promedio ponderado
+  // ==========================================
+  // SANITIZACIÓN Y CÁLCULO PUREZA NUMÉRICA
+  // ==========================================
   var totalMaterias = detalles.length;
   var sumaPorcentajesLimpios = 0;
   var completadas = 0;
 
   detalles.forEach(function(d) {
-    // Extrae exclusivamente caracteres numéricos y puntos decimales
+    // 1. Convertir a string y extraer solo caracteres numéricos y puntos
     var strVal = String(d.cumplimiento || '0').replace(/[^0-9.]/g, '').trim();
     var numVal = parseFloat(strVal) || 0;
 
-    // Escala de decimal (0.53) a porcentaje entero (53) si corresponde
+    // 2. Ajustar escala de decimal a entero si aplica (ej: 0.53 -> 53)
     if (numVal <= 1 && numVal > 0) {
       numVal = numVal * 100;
     }
 
-    // Normaliza el rango para evitar valores inconsistentes (0 a 100)
+    // 3. Normalizar límites (0 a 100)
     numVal = Math.min(100, Math.max(0, Math.round(numVal)));
 
+    // 4. Sumar al acumulador
     sumaPorcentajesLimpios += numVal;
     
     if (numVal >= 100) {
       completadas++;
     }
 
+    // Aseguramos que el valor procesado en la fila individual sea consistente
     d.cumplimientoLimpio = numVal;
   });
 
-  // Cálculo directo del promedio: (Suma de % de cada materia) / (Total de materias)
+  // 5. Promedio aritmético estricto
   var promedioCumplimiento = totalMaterias > 0 
     ? Math.round(sumaPorcentajesLimpios / totalMaterias) 
     : 0;
 
-  // URLs de los logos institucionales
-  var logo1 = "https://w7.pngwing.com/pngs/829/654/png-transparent-national-police-of-colombia-national-police-corps-army-officer-police-emblem-people-logo-thumbnail.png";
+  var logo1 = "https://seeklogo.com/images/P/policia-nacional-de-colombia-logo-961A5AC218-seeklogo.com.png";
   var logo2 = "https://www.pngitem.com/pimgs/b/355-3559911_nuevo-png.png";
 
-  // 3. Estructura HTML/CSS del reporte PDF
   var html = `
     <!DOCTYPE html>
     <html>
@@ -350,7 +292,6 @@ function generarPDFDocente(nombreDocente) {
     </head>
     <body>
       
-      <!-- Encabezado con Logos -->
       <table class="header-table">
         <tr>
           <td class="logo-cell-left">
@@ -366,7 +307,6 @@ function generarPDFDocente(nombreDocente) {
         </tr>
       </table>
 
-      <!-- Tarjetas de Resumen KPI -->
       <table class="kpi-table">
         <tr>
           <td class="kpi-card">
@@ -386,7 +326,6 @@ function generarPDFDocente(nombreDocente) {
 
       <h3 style="font-size: 13px; color: #1a365d; margin-bottom: 8px; margin-top: 0;">Desglose por Materia y Grupo</h3>
       
-      <!-- Tabla Principal de Asignaturas -->
       <table class="data-table">
         <thead>
           <tr>
@@ -399,7 +338,6 @@ function generarPDFDocente(nombreDocente) {
         <tbody>
   `;
 
-  // Construcción dinámica de filas por asignatura
   detalles.forEach(function(d) {
     var valMostrar = d.cumplimientoLimpio;
     var estadoBadge = valMostrar >= 100 
@@ -424,7 +362,6 @@ function generarPDFDocente(nombreDocente) {
         </tbody>
       </table>
 
-      <!-- Pie de página dinámico con la fecha de cohorte -->
       <div class="footer">
         Este documento oficial se ha generado automáticamente con base en los registros con cohorte: <strong>${fechaCohorte}</strong>.
       </div>
@@ -432,13 +369,36 @@ function generarPDFDocente(nombreDocente) {
     </html>
   `;
 
-  // 4. Conversión del HTML a Blob PDF
   var blob = HtmlService.createHtmlOutput(html).getAs('application/pdf');
   blob.setName('Reporte_' + nombreDocente.replace(/\s+/g, '_') + '.pdf');
 
-  // Retorna en Base64 para ser consumido por el cliente HTML/JS
   return {
     base64: Utilities.base64Encode(blob.getBytes()),
     filename: blob.getName()
   };
 }
+
+/**
+ * Obtiene el reporte en PDF (Base64) de todos los docentes de la cohorte actual.
+ * @returns {Array<Object>} Lista de objetos con el nombre del docente, filename y base64.
+ */
+function obtenerTodosLosPDFs() {
+  var docentes = obtenerListaDocentes();
+  var resultados = [];
+
+  for (var i = 0; i < docentes.length; i++) {
+    try {
+      var pdfData = generarPDFDocente(docentes[i]);
+      resultados.push({
+        docente: docentes[i],
+        filename: pdfData.filename,
+        base64: pdfData.base64
+      });
+    } catch (e) {
+      Logger.log("Error al generar PDF para: " + docentes[i] + " - " + e.toString());
+    }
+  }
+
+  return resultados;
+}
+
