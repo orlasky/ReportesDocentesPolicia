@@ -1,0 +1,141 @@
+// LÓGICA //
+1. Solicita la lectura del espacio y validación de lectura correcta.
+2. Solicita la tarea indicando espectativas gáfica, lógica y resultado.
+3. Test de producto de salida.
+
+
+//Prompt entregado sin optimizar //
+
+Describele esta tabla de excel a un ciego que es excelente ubicandose por descripciones precisas:
+Tengo un documento, que desde la fila 1, y desde la columna D hasta la w, está así computesta por encabezados:
+DocenteMateriaTipo ÁreaClaseGradoGrupoTrimestreNivelIcono% CumplimientoHora MensualMeta Act. LibroTotal Act. LibroPond. LibroMeta Act. PropiaTotal Act. PropiaPond. PropiaMeta Pub. MuroTotal Pub. MuroPond. Muro.
+
+Desde la columna A hasta la C: Fecha ArchivoNombre de PolicíaCiudad, tambien desde la fila 1.
+
+
+
+// entregado por el agente //
+
+Esta es una descripción estructural y ordenada de la tabla para construir un mapa mental preciso de sus 23 columnas (de la A a la W), organizadas con sus encabezados en la Fila 1.
+
+Visión General de la Estructura
+Ubicación de encabezados: Fila 1 (desde A1 hasta W1).
+
+Ancho total: 23 columnas.
+
+Organización lógica: La tabla se divide en 6 bloques funcionales ordenados de izquierda a derecha.
+
+Bloque 1: Datos Generales e Identificación (Columnas A a C)
+Información contextual y de registro.
+
+Columna A: Fecha Archivo
+
+Columna B: Nombre de Policía
+
+Columna C: Ciudad
+
+Bloque 2: Información Académica y Clasificación (Columnas D a L)
+Datos descriptivos del docente, materia y grupo.
+4. Columna D: Docente
+5. Columna E: Materia
+6. Columna F: Tipo Área
+7. Columna G: Clase
+8. Columna H: Grado
+9. Columna I: Grupo
+10. Columna J: Trimestre
+11. Columna K: Nivel
+12. Columna L: Icono
+
+Bloque 3: Métricas Generales de Cumplimiento (Columnas M y N)
+Indicadores generales de desempeño y tiempo.
+13. Columna M: % Cumplimiento
+14. Columna N: Hora Mensual
+
+Bloque 4: Actividades de Libro (Columnas O a Q)
+Trilogía de métricas para actividades basadas en el texto guía (Meta, Total y Ponderación).
+15. Columna O: Meta Act. Libro
+16. Columna P: Total Act. Libro
+17. Columna Q: Pond. Libro (Ponderación)
+
+Bloque 5: Actividades Propias (Columnas R a T)
+Trilogía de métricas para actividades diseñadas por el docente.
+18. Columna R: Meta Act. Propia
+19. Columna S: Total Act. Propia
+20. Columna T: Pond. Propia (Ponderación)
+
+Bloque 6: Publicaciones en Muro (Columnas U a W)
+Trilogía de métricas para interacción en el muro digital.
+21. Columna U: Meta Pub. Muro
+22. Columna V: Total Pub. Muro
+23. Columna W: Pond. Muro (Ponderación)
+
+Resumen para Navegación Rápida
+A–C: Identificación del registro (Fecha, Policía, Ciudad).
+
+D–L: Detalle del curso y docente (9 columnas).
+
+M–N: Cumplimiento y horas.
+
+O–W: Módulos de seguimiento compuestos por tres tríos homogéneos (Meta, Total, Ponderación):
+
+O, P, Q: Libro
+
+R, S, T: Actividad Propia
+
+U, V, W: Publicación Muro
+
+
+// Iteración 2 //
+Aquí tienes una solución completa basada en Google Apps Script que crea una interfaz moderna, limpia e interactiva dentro de tu hoja de cálculo mediante un panel lateral (Sidebar) o ventana emergente (Dialog).
+
+¿Qué incluye esta solución?
+Menú personalizado: Añade una pestaña llamada  Dashboard Docentes en tu barra superior de Google Sheets.
+
+Buscador/Desplegable de Docentes: Selecciona cualquier profesor listado en la Columna D.
+
+Resumen y Tarjetas por Curso: Para el docente seleccionado, agrupa sus registros por Grado, Grupo y Clase.
+
+Cálculo de Faltantes: Muestra el porcentaje actual (% Cumplimiento - Columna M) y explicita qué le falta para llegar al 100% en:
+
+Actividades de Libro: Diferencia entre Meta Act. Libro y Total Act. Libro.
+
+Actividades Propias: Diferencia entre Meta Act. Propia y Total Act. Propia.
+
+Publicaciones en Muro: Diferencia entre Meta Pub. Muro y Total Pub. Muro.
+
+Botón de Mensaje e Integración: Cada tarjeta de grupo incluye un botón que abre una ventana emergente con un mensaje redactado automáticamente indicándole las tareas faltantes, con las dos opciones solicitadas:
+
+Copiar al portapapeles.
+
+Enviar por correo electrónico (solicitando la dirección de correo).
+
+
+// PROMPT OPTIMIZADO//
+Actúa como un experto en Google Apps Script (GAS) e HTML. Desarrolla una solución para gestionar un Dashboard de Cumplimiento Docente en Google Sheets con interfaz Sidebar en HTML/JS.
+
+Aplica estrictamente las siguientes reglas y condiciones:
+
+1. FILTRADO POR COHORTE Y FECHAS:
+   - Recorre la Columna A (Fechas) identificando únicamente la cohorte más reciente (mayor timestamp).
+   - Crea un conversor/normalizador de fechas tolerante a formatos string ("DD/MM/YYYY", "YYYY-MM-DD") y objetos Date reales.
+   - Filtra y procesa únicamente las filas que coincidan con la última cohorte. Ignora filas con el valor "sin meta asignada" en la columna de Nivel (Columna K).
+
+2. CÁLCULO DE ACTIVIDADES FALTANTES:
+   - Parsea porcentajes (Columna M) tolerando símbolos "%", decimales (0.85 -> 85) y espacios.
+   - Si el % de cumplimiento es menor a 100%, calcula la diferencia restante: max(0, Meta - Total) para Meta Libro (O/P), Meta Propia (R/S) y Meta Muro (U/V).
+
+3. REPORTES PDF INDIVIDUALES:
+   - Sanitización numérica estricta para evitar errores NaN.
+   - El promedio global debe calcularse directamente como: (Suma de % de cada materia) / (Total de materias evaluadas).
+   - Genera una plantilla HTML/CSS elegante con:
+     * Header con dos imágenes/logos en esquinas opuestas.
+     * KPIs dinámicos (Materias evaluadas, % Cumplimiento Global, Metas alcanzadas).
+     * Tabla detallada por Materia/Clase, Grado/Grupo, Badge de % y Desglose de Faltantes.
+     * Footer con la fecha exacta de la cohorte evaluada.
+   - Convierte el HTML a Blob PDF y devuélvelo codificado en Base64.
+
+4. DESCARGA MASIVA EN .ZIP (JSZip):
+   - Incluye las librerías JSZip (v3.10.1) y FileSaver (v2.0.5) en la interfaz HTML.
+   - Crea un botón "Descargar Todos (.ZIP)".
+   - Implementa una función en Apps Script que genere en lote los PDFs en Base64 de todos los docentes activos de la última cohorte.
+   - En el cliente JS, empaqueta todos los archivos devueltos en un único archivo comprimido .ZIP y dispara la descarga automática en el navegador mostrando indicadores de progreso.
