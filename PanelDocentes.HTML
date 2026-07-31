@@ -9,6 +9,11 @@
       .btn-custom { width: 100%; margin-bottom: 8px; font-weight: 500; }
       #loader { display: none; text-align: center; margin: 15px 0; }
     </style>
+
+<!-- Librerías para compresión e interacción de descargas masivas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
   </head>
   <body>
 
@@ -37,7 +42,12 @@
         </button>
       </div>
     </div>
+<button id="btnZip" onclick="descargarTodosZIP()" style="background-color: #2b6cb0; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 10px;">
+  📦 Descargar Todos los PDF (.ZIP)
+</button>
 
+<!-- Mensaje de estado/progreso -->
+<div id="progresoZip" style="margin-top: 8px; font-size: 12px; color: #4a5568; text-align: center;"></div>
     <div id="resultado" class="mt-3"></div>
 
     <script>
@@ -139,6 +149,53 @@
       function mostrarLoader(activar) {
         document.getElementById('loader').style.display = activar ? 'block' : 'none';
       }
+
+      function descargarTodosZIP() {
+  var btn = document.getElementById('btnZip');
+  var txtProgreso = document.getElementById('progresoZip');
+
+  btn.disabled = true;
+  btn.innerText = '⏳ Generando reportes...';
+  txtProgreso.innerText = 'Procesando PDFs desde el servidor, por favor espera...';
+
+  // Llama a la función del servidor Google Apps Script
+  google.script.run
+    .withSuccessHandler(function(listaPDFs) {
+      if (!listaPDFs || listaPDFs.length === 0) {
+        alert('No se encontraron reportes para empaquetar.');
+        btn.disabled = false;
+        btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
+        txtProgreso.innerText = '';
+        return;
+      }
+
+      txtProgreso.innerText = 'Empaquetando ' + listaPDFs.length + ' archivos en ZIP...';
+
+      var zip = new JSZip();
+
+      // Agrega cada PDF codificado en Base64 al archivo ZIP
+      listaPDFs.forEach(function(item) {
+        zip.file(item.filename, item.base64, { base64: true });
+      });
+
+      // Genera el archivo ZIP y dispara la descarga en la computadora
+      zip.generateAsync({ type: "blob" }).then(function(content) {
+        var fechaActual = new Date().toISOString().slice(0, 10);
+        saveAs(content, "Reportes_Docentes_" + fechaActual + ".zip");
+
+        btn.disabled = false;
+        btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
+        txtProgreso.innerText = '✅ ¡Descarga completada con éxito!';
+      });
+    })
+    .withFailureHandler(function(err) {
+      alert('Error al obtener los reportes: ' + err.message);
+      btn.disabled = false;
+      btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
+      txtProgreso.innerText = '';
+    })
+    .obtenerTodosLosPDFs();
+}
     </script>
   </body>
 </html>
