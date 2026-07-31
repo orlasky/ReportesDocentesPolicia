@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body { padding: 15px; font-size: 14px; background-color: #f8f9fa; }
+      .card { border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 15px; }
+      .btn-custom { width: 100%; margin-bottom: 8px; font-weight: 500; }
+      #loader { display: none; text-align: center; margin: 15px 0; }
+    </style>
+  </head>
+  <body>
+
+    <h5 class="mb-3 text-primary fw-bold">Panel de Gestión Docente</h5>
+
+    <div class="card p-3">
+      <label for="selectDocentes" class="form-label fw-bold">Seleccionar Docente:</label>
+      <select id="selectDocentes" class="form-select mb-3" onchange="cargarDetalle()">
+        <option value="">Cargando docentes...</option>
+      </select>
+
+      <div id="loader">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="ms-2 text-muted">Procesando datos...</span>
+      </div>
+
+      <div id="acciones" style="display: none;">
+        <!-- Botón 1: Enviar Correo -->
+        <button class="btn btn-primary btn-custom" onclick="enviarResumenCorreo()">
+          📧 Enviar Resumen por Correo
+        </button>
+
+        <!-- Botón 2: Descargar PDF -->
+        <button class="btn btn-outline-danger btn-custom" onclick="descargarPDF()">
+          📄 Descargar Reporte en PDF
+        </button>
+      </div>
+    </div>
+
+    <div id="resultado" class="mt-3"></div>
+
+    <script>
+      window.onload = function() {
+        google.script.run
+          .withSuccessHandler(llenarSelect)
+          .obtenerListaDocentes();
+      };
+
+      function llenarSelect(docentes) {
+        var select = document.getElementById('selectDocentes');
+        select.innerHTML = '<option value="">-- Seleccione un docente --</option>';
+        docentes.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          select.appendChild(opt);
+        });
+      }
+
+      function cargarDetalle() {
+        var docente = document.getElementById('selectDocentes').value;
+        var acciones = document.getElementById('acciones');
+        if (docente) {
+          acciones.style.display = 'block';
+        } else {
+          acciones.style.display = 'none';
+        }
+      }
+
+      // 1. Enviar Resumen Individual por Correo
+      function enviarResumenCorreo() {
+        var docente = document.getElementById('selectDocentes').value;
+        if (!docente) return;
+
+        mostrarLoader(true);
+        google.script.run
+          .withSuccessHandler(function(detalles) {
+            if (detalles.length === 0) {
+              alert('No se encontraron registros.');
+              mostrarLoader(false);
+              return;
+            }
+
+            var mensaje = `Estimado(a) ${docente},\n\nA continuación compartimos el resumen de su cumplimiento más reciente:\n\n`;
+            
+            detalles.forEach(function(d) {
+              mensaje += `• Materia: ${d.materia} (${d.grado} - ${d.grupo})\n`;
+              mensaje += `  Cumplimiento: ${d.cumplimiento}%\n`;
+              if (d.cumplimiento < 100) {
+                mensaje += `  Pendientes -> Libro: ${d.faltaLibro} | Propia: ${d.faltaPropia} | Muro: ${d.faltaMuro}\n`;
+              } else {
+                mensaje += `  ¡Felicidades, meta completada!\n`;
+              }
+              mensaje += `\n`;
+            });
+
+            // Enviar vía Apps Script
+            google.script.run
+              .withSuccessHandler(function(res) {
+                mostrarLoader(false);
+                if (res.exito) {
+                  alert('Correo enviado exitosamente a ' + docente);
+                } else {
+                  alert('Error al enviar el correo: ' + res.error);
+                }
+              })
+              .enviarCorreoDocente(docente, 'Resumen de Cumplimiento Docente', mensaje);
+
+          })
+          .obtenerDetalleDocente(docente);
+      }
+
+      // 2. Descargar PDF con Diseño Moderno
+      function descargarPDF() {
+        var docente = document.getElementById('selectDocentes').value;
+        if (!docente) return;
+
+        mostrarLoader(true);
+        google.script.run
+          .withSuccessHandler(function(res) {
+            mostrarLoader(false);
+            
+            // Disparar descarga en el navegador desde Base64
+            var a = document.createElement('a');
+            a.href = 'data:application/pdf;base64,' + res.base64;
+            a.download = res.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          })
+          .withFailureHandler(function(err) {
+            mostrarLoader(false);
+            alert('Error generando PDF: ' + err.message);
+          })
+          .generarPDFDocente(docente);
+      }
+
+      function mostrarLoader(activar) {
+        document.getElementById('loader').style.display = activar ? 'block' : 'none';
+      }
+    </script>
+  </body>
+</html>
