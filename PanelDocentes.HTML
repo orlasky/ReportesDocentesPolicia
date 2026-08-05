@@ -2,53 +2,90 @@
 <html>
   <head>
     <base target="_top">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Librerías JSZip y FileSaver -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
     <style>
-      body { padding: 15px; font-size: 14px; background-color: #f8f9fa; }
-      .card { border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 15px; }
-      .btn-custom { width: 100%; margin-bottom: 8px; font-weight: 500; }
-      #loader { display: none; text-align: center; margin: 15px 0; }
+      * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+      body { margin: 0; padding: 18px; background-color: #f8fafc; color: #0f172a; font-size: 13px; }
+      
+      .header-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+      .header-sub { font-size: 11px; color: #64748b; margin-bottom: 16px; }
+
+      .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 14px; }
+
+      label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 12px; color: #334155; }
+      
+      select { width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #ffffff; font-size: 12px; color: #1e293b; outline: none; transition: all 0.2s ease; }
+      select:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
+
+      .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; margin-bottom: 8px; }
+      
+      .btn-primary { background-color: #0f172a; color: #ffffff; }
+      .btn-primary:hover { background-color: #1e293b; }
+      
+      .btn-outline { background-color: #ffffff; color: #0f172a; border-color: #cbd5e1; }
+      .btn-outline:hover { background-color: #f1f5f9; }
+
+      .btn-zip { background-color: #2563eb; color: #ffffff; margin-top: 4px; }
+      .btn-zip:hover { background-color: #1d4ed8; }
+      
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+      .loader { display: none; text-align: center; margin: 12px 0; }
+      .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      #progresoZip { font-size: 11px; color: #64748b; text-align: center; margin-top: 6px; min-height: 16px; }
+
+      .credits-footer { margin-top: 24px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #64748b; }
+      .credits-footer strong { color: #334155; font-weight: 600; }
     </style>
-
-<!-- Librerías para compresión e interacción de descargas masivas -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
   </head>
   <body>
 
-    <h5 class="mb-3 text-primary fw-bold">Panel de Gestión Docente</h5>
+    <div class="header-title">Dashboard Docentes</div>
+    <div class="header-sub">Gestión de Cumplimiento e Informes</div>
 
-    <div class="card p-3">
-      <label for="selectDocentes" class="form-label fw-bold">Seleccionar Docente:</label>
-      <select id="selectDocentes" class="form-select mb-3" onchange="cargarDetalle()">
-        <option value="">Cargando docentes...</option>
+    <div class="card">
+      <label for="selectDocentes">Docente activo:</label>
+      <select id="selectDocentes" onchange="cargarDetalle()">
+        <option value="">Cargando lista de docentes...</option>
       </select>
 
-      <div id="loader">
-        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-        <span class="ms-2 text-muted">Procesando datos...</span>
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Procesando...</div>
       </div>
 
-      <div id="acciones" style="display: none;">
-        <!-- Botón 1: Enviar Correo -->
-        <button class="btn btn-primary btn-custom" onclick="enviarResumenCorreo()">
-          📧 Enviar Resumen por Correo
+      <div id="acciones" style="display: none; margin-top: 14px;">
+        <button class="btn btn-primary" onclick="enviarResumenCorreo()">
+          <span>📧</span> Enviar Resumen por Correo
         </button>
 
-        <!-- Botón 2: Descargar PDF -->
-        <button class="btn btn-outline-danger btn-custom" onclick="descargarPDF()">
-          📄 Descargar Reporte en PDF
+        <button class="btn btn-outline" onclick="descargarPDF()">
+          <span>📄</span> Descargar Reporte PDF
         </button>
       </div>
     </div>
-<button id="btnZip" onclick="descargarTodosZIP()" style="background-color: #2b6cb0; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 10px;">
-  📦 Descargar Todos los PDF (.ZIP)
-</button>
 
-<!-- Mensaje de estado/progreso -->
-<div id="progresoZip" style="margin-top: 8px; font-size: 12px; color: #4a5568; text-align: center;"></div>
-    <div id="resultado" class="mt-3"></div>
+    <div class="card" style="padding: 12px;">
+      <button id="btnZip" class="btn btn-zip" onclick="descargarTodosZIP()">
+        <span>📦</span> Descargar Todos los PDF (.ZIP)
+      </button>
+      <div id="progresoZip"></div>
+    </div>
+
+    <div class="credits-footer">
+      Desarrollado por: <strong>Orland J. Orozco</strong><br>
+      <span style="font-size: 10px;">Consultor Edtech</span>
+    </div>
 
     <script>
       window.onload = function() {
@@ -59,7 +96,7 @@
 
       function llenarSelect(docentes) {
         var select = document.getElementById('selectDocentes');
-        select.innerHTML = '<option value="">-- Seleccione un docente --</option>';
+        select.innerHTML = '<option value="">-- Seleccionar Docente --</option>';
         docentes.forEach(function(d) {
           var opt = document.createElement('option');
           opt.value = d;
@@ -71,14 +108,9 @@
       function cargarDetalle() {
         var docente = document.getElementById('selectDocentes').value;
         var acciones = document.getElementById('acciones');
-        if (docente) {
-          acciones.style.display = 'block';
-        } else {
-          acciones.style.display = 'none';
-        }
+        acciones.style.display = docente ? 'block' : 'none';
       }
 
-      // 1. Enviar Resumen Individual por Correo
       function enviarResumenCorreo() {
         var docente = document.getElementById('selectDocentes').value;
         if (!docente) return;
@@ -87,7 +119,7 @@
         google.script.run
           .withSuccessHandler(function(detalles) {
             if (detalles.length === 0) {
-              alert('No se encontraron registros.');
+              alert('No se encontraron registros para el docente.');
               mostrarLoader(false);
               return;
             }
@@ -105,14 +137,13 @@
               mensaje += `\n`;
             });
 
-            // Enviar vía Apps Script
             google.script.run
               .withSuccessHandler(function(res) {
                 mostrarLoader(false);
                 if (res.exito) {
-                  alert('Correo enviado exitosamente a ' + docente);
+                  alert('Correo enviado con éxito a ' + docente);
                 } else {
-                  alert('Error al enviar el correo: ' + res.error);
+                  alert('Error al enviar correo: ' + res.error);
                 }
               })
               .enviarCorreoDocente(docente, 'Resumen de Cumplimiento Docente', mensaje);
@@ -121,7 +152,6 @@
           .obtenerDetalleDocente(docente);
       }
 
-      // 2. Descargar PDF con Diseño Moderno
       function descargarPDF() {
         var docente = document.getElementById('selectDocentes').value;
         if (!docente) return;
@@ -130,8 +160,6 @@
         google.script.run
           .withSuccessHandler(function(res) {
             mostrarLoader(false);
-            
-            // Disparar descarga en el navegador desde Base64
             var a = document.createElement('a');
             a.href = 'data:application/pdf;base64,' + res.base64;
             a.download = res.filename;
@@ -141,61 +169,57 @@
           })
           .withFailureHandler(function(err) {
             mostrarLoader(false);
-            alert('Error generando PDF: ' + err.message);
+            alert('Error al generar PDF: ' + err.message);
           })
           .generarPDFDocente(docente);
+      }
+
+      function descargarTodosZIP() {
+        var btn = document.getElementById('btnZip');
+        var txtProgreso = document.getElementById('progresoZip');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Generando...';
+        txtProgreso.innerText = 'Procesando archivos desde el servidor...';
+
+        google.script.run
+          .withSuccessHandler(function(listaPDFs) {
+            if (!listaPDFs || listaPDFs.length === 0) {
+              alert('No se encontraron reportes.');
+              btn.disabled = false;
+              btn.innerHTML = '<span>📦</span> Descargar Todos los PDF (.ZIP)';
+              txtProgreso.innerText = '';
+              return;
+            }
+
+            txtProgreso.innerText = 'Empaquetando ' + listaPDFs.length + ' archivos...';
+
+            var zip = new JSZip();
+            listaPDFs.forEach(function(item) {
+              zip.file(item.filename, item.base64, { base64: true });
+            });
+
+            zip.generateAsync({ type: "blob" }).then(function(content) {
+              var fechaActual = new Date().toISOString().slice(0, 10);
+              saveAs(content, "Reportes_Docentes_" + fechaActual + ".zip");
+
+              btn.disabled = false;
+              btn.innerHTML = '<span>📦</span> Descargar Todos los PDF (.ZIP)';
+              txtProgreso.innerText = '✅ Finalizado con éxito';
+            });
+          })
+          .withFailureHandler(function(err) {
+            alert('Error al obtener reportes: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<span>📦</span> Descargar Todos los PDF (.ZIP)';
+            txtProgreso.innerText = '';
+          })
+          .obtenerTodosLosPDFs();
       }
 
       function mostrarLoader(activar) {
         document.getElementById('loader').style.display = activar ? 'block' : 'none';
       }
-
-      function descargarTodosZIP() {
-  var btn = document.getElementById('btnZip');
-  var txtProgreso = document.getElementById('progresoZip');
-
-  btn.disabled = true;
-  btn.innerText = '⏳ Generando reportes...';
-  txtProgreso.innerText = 'Procesando PDFs desde el servidor, por favor espera...';
-
-  // Llama a la función del servidor Google Apps Script
-  google.script.run
-    .withSuccessHandler(function(listaPDFs) {
-      if (!listaPDFs || listaPDFs.length === 0) {
-        alert('No se encontraron reportes para empaquetar.');
-        btn.disabled = false;
-        btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
-        txtProgreso.innerText = '';
-        return;
-      }
-
-      txtProgreso.innerText = 'Empaquetando ' + listaPDFs.length + ' archivos en ZIP...';
-
-      var zip = new JSZip();
-
-      // Agrega cada PDF codificado en Base64 al archivo ZIP
-      listaPDFs.forEach(function(item) {
-        zip.file(item.filename, item.base64, { base64: true });
-      });
-
-      // Genera el archivo ZIP y dispara la descarga en la computadora
-      zip.generateAsync({ type: "blob" }).then(function(content) {
-        var fechaActual = new Date().toISOString().slice(0, 10);
-        saveAs(content, "Reportes_Docentes_" + fechaActual + ".zip");
-
-        btn.disabled = false;
-        btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
-        txtProgreso.innerText = '✅ ¡Descarga completada con éxito!';
-      });
-    })
-    .withFailureHandler(function(err) {
-      alert('Error al obtener los reportes: ' + err.message);
-      btn.disabled = false;
-      btn.innerText = '📦 Descargar Todos los PDF (.ZIP)';
-      txtProgreso.innerText = '';
-    })
-    .obtenerTodosLosPDFs();
-}
     </script>
   </body>
 </html>
