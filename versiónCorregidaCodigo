@@ -1,0 +1,281 @@
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu(' Dashboard Docentes')
+    .addItem('Abrir Panel de Control', 'abrirPanelDocentes')
+    .addToUi();
+}
+
+function abrirPanelDocentes() {
+  var html = HtmlService.createHtmlOutputFromFile('PanelDocentes')
+      .setTitle('Gestión y Cumplimiento Docente')
+      .setWidth(450);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+// ==========================================
+// 1. CONVERSIÓN Y CLAVE ÚNICA DE FECHA
+// ==========================================
+
+function convertirFecha(valor) {
+  if (!valor) return null;
+
+  if (Object.prototype.toString.call(valor) === "[object Date]" && !isNaN(valor.getTime())) {
+    return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
+  }
+
+  var texto = String(valor).trim();
+  if (!texto) return null;
+
+  var partes = texto.split(/[\/\-\.]/);
+  if (partes.length !== 3) return null;
+
+  var dia, mes, anio;
+
+  if (partes[0].length === 4) {
+    anio = Number(partes[0]);
+    mes  = Number(partes[1]);
+    dia  = Number(partes[2]);
+  } else {
+    dia  = Number(partes[0]);
+    mes  = Number(partes[1]);
+    anio = Number(partes[2]);
+  }
+
+  if (isNaN(dia) || isNaN(mes) || isNaN(anio)) return null;
+
+  var fecha = new Date(anio, mes - 1, dia);
+
+  if (
+    fecha.getFullYear() !== anio ||
+    fecha.getMonth() + 1 !== mes ||
+    fecha.getDate() !== dia
+  ) {
+    return null;
+  }
+
+  return fecha;
+}
+
+function claveFecha(fecha) {
+  if (!fecha) return "";
+  return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+
+function obtenerFechaMasReciente(data) {
+  var ultimaFecha = null;
+  var ultimoTiempo = -Infinity;
+
+  // CORREGIDO: Empieza en índice 3 (Fila 4)
+  for (var i = 3; i < data.length; i++) {
+    var fechaObj = convertirFecha(data[i][0]);
+    if (!fechaObj) continue;
+
+    var tiempo = fechaObj.getTime();
+    if (tiempo > ultimoTiempo) {
+      ultimoTiempo = tiempo;
+      ultimaFecha = fechaObj;
+    }
+  }
+
+  return ultimaFecha;
+}
+
+function obtenerFilasFechaMasReciente(data) {
+  var ultimaFecha = obtenerFechaMasReciente(data);
+  if (!ultimaFecha) return [];
+
+  var claveMax = claveFecha(ultimaFecha);
+  var resultado = [];
+
+  // CORREGIDO: Empieza en índice 3 (Fila 4)
+  for (var i = 3; i < data.length; i++) {
+    var fila = data[i];
+    var fechaObj = convertirFecha(fila[0]);
+    if (fechaObj && claveFecha(fechaObj) === claveMax) {
+      resultado.push(fila);
+    }
+  }
+
+  return resultado;
+}
+
+function parsearPorcentaje(val) {
+  if (val === null || val === undefined) return 0;
+  var str = String(val).replace("%", "").trim();
+  var num = parseFloat(str);
+  if (isNaN(num)) return 0;
+
+  if (num <= 1 && num > 0) {
+    num = num * 100;
+  }
+  return Math.round(num);
+}
+
+// ==========================================
+// 2. CONSULTAS DE DATOS PARA PANEL
+// ==========================================
+
+function obtenerListaDocentes() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  
+  var filasRecientes = obtenerFilasFechaMasReciente(data);
+  var docentes = new Set();
+
+  for (var i = 0; i < filasRecientes.length; i++) {
+    var fila = filasRecientes[i];
+    var nombreDocente = fila[3];
+    var nivel = String(fila[10] || '').trim().toLowerCase();
+
+    if (nombreDocente && nivel !== 'sin meta asignada') {
+      docentes.add(nombreDocente);
+    }
+  }
+
+  return Array.from(docentes).sort();
+}
+
+function obtenerDetalleDocente(nombreDocente) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  
+  var filasRecientes = obtenerFilasFechaMasReciente(data);
+  var resultados = [];
+
+  for (var i = 0; i < filasRecientes.length; i++) {
+    var fila = filasRecientes[i];
+    var docenteFila = fila[3];
+    var nivel = String(fila[10] || '').trim().toLowerCase();
+
+    if (docenteFila === nombreDocente && nivel !== 'sin meta asignada') {
+      var porcentaje = parsearPorcentaje(fila[12]);
+
+      var faltaLibro = 0;
+      var faltaPropia = 0;
+      var faltaMuro = 0;
+
+      if (porcentaje < 100) {
+        var metaLibro = Number(fila[14]) || 0;
+        var totalLibro = Number(fila[15]) || 0;
+        faltaLibro = Math.max(0, metaLibro - totalLibro);
+
+        var metaPropia = Number(fila[17]) || 0;
+        var totalPropia = Number(fila[18]) || 0;
+        faltaPropia = Math.max(0, metaPropia - totalPropia);
+
+        var metaMuro = Number(fila[20]) || 0;
+        var totalMuro = Number(fila[21]) || 0;
+        faltaMuro = Math.max(0, metaMuro - totalMuro);
+      }
+
+      resultados.push({
+        clase: fila[6] || 'N/A',
+        grado: fila[7] || 'N/A',
+        grupo: fila[8] || 'N/A',
+        materia: fila[4] || 'N/A',
+        cumplimiento: porcentaje,
+        faltaLibro: faltaLibro,
+        faltaPropia: faltaPropia,
+        faltaMuro: faltaMuro
+      });
+    }
+  }
+  return resultados;
+}
+
+function enviarCorreoDocente(destinatario, asunto, mensaje) {
+  try {
+    MailApp.sendEmail({
+      to: destinatario,
+      subject: asunto,
+      htmlBody: mensaje.replace(/\n/g, '<br>')
+    });
+    return { exito: true };
+  } catch (e) {
+    return { exito: false, error: e.toString() };
+  }
+}
+
+// ==========================================
+// 3. AUXILIARES DIBIE Y MENSAJES
+// ==========================================
+
+function calcularNivelDIBIE(promedio) {
+  if (promedio >= 90) return { nombre: "Superior", color: "#0f5132", bg: "#d1e7dd" };
+  if (promedio >= 70) return { nombre: "Satisfactorio", color: "#0c4a6e", bg: "#e0f2fe" };
+  if (promedio >= 50) return { nombre: "Básico", color: "#664d03", bg: "#fff3cd" };
+  return { nombre: "Deficiente", color: "#842029", bg: "#f8d7da" };
+}
+
+function obtenerMensajeMotivacional(promedio) {
+  if (promedio >= 90) {
+    return "✅ <strong>¡Excelente desempeño!</strong> Felicitaciones por tu alto compromiso.";
+  } else if (promedio >= 70) {
+    return "⚠️ <strong>¡Buen trabajo!</strong> Estás en un nivel satisfactorio.";
+  } else {
+    return "❌ <strong>¡Aún podemos mejorar!</strong> Te invitamos a apropiar y aprovechar al máximo las herramientas.";
+  }
+}
+
+// ==========================================
+// 4. GENERACIÓN DE PDF
+// ==========================================
+
+function generarPDFDocente(nombreDocente) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  
+  var fechaMasRecienteObj = obtenerFechaMasReciente(data);
+  var detalles = obtenerDetalleDocente(nombreDocente);
+  
+  if (!detalles || detalles.length === 0) {
+    throw new Error('No se encontraron registros recientes para el docente.');
+  }
+
+  var fechaCohorte = fechaMasRecienteObj 
+    ? Utilities.formatDate(fechaMasRecienteObj, Session.getScriptTimeZone(), "dd/MM/yyyy")
+    : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  var fechaHoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  var totalMaterias = detalles.length;
+  var sumaPorcentajes = 0;
+  var completadas = 0;
+
+  detalles.forEach(function(d) {
+    var strVal = String(d.cumplimiento || '0').replace(/[^0-9.]/g, '').trim();
+    var numVal = parseFloat(strVal) || 0;
+    numVal = Math.min(100, Math.max(0, Math.round(numVal)));
+    d.cumplimientoLimpio = numVal;
+    sumaPorcentajes += numVal;
+    if (numVal >= 100) completadas++;
+  });
+
+  var promedioCumplimiento = totalMaterias > 0 ? Math.round(sumaPorcentajes / totalMaterias) : 0;
+  var dibie = calcularNivelDIBIE(promedioCumplimiento);
+  var mensajeMotivacional = obtenerMensajeMotivacional(promedioCumplimiento);
+
+  var html = `<html><body><h1>Informe de Docente: ${nombreDocente}</h1><p>Fecha: ${fechaHoy}</p></body></html>`;
+  
+  var blob = HtmlService.createHtmlOutput(html).getAs('application/pdf');
+  blob.setName('Reporte_' + nombreDocente.replace(/\s+/g, '_') + '.pdf');
+
+  return {
+    base64: Utilities.base64Encode(blob.getBytes()),
+    filename: blob.getName()
+  };
+}
+
+function obtenerTodosLosPDFs() {
+  var docentes = obtenerListaDocentes();
+  var resultados = [];
+  for (var i = 0; i < docentes.length; i++) {
+    try {
+      var pdfData = generarPDFDocente(docentes[i]);
+      resultados.push({ docente: docentes[i], filename: pdfData.filename, base64: pdfData.base64 });
+    } catch (e) {
+      Logger.log("Error: " + e.toString());
+    }
+  }
+  return resultados;
+}
