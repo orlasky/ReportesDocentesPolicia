@@ -13,7 +13,7 @@ function abrirPanelDocentes() {
 }
 
 // ==========================================
-// 1. CONVERSIÓN Y CLAVE ÚNICA DE FECHA
+// 1. CONVERSIÓN Y CLAVE ÚNICA DE FECHA (DESDE A1)
 // ==========================================
 
 function convertirFecha(valor) {
@@ -61,23 +61,11 @@ function claveFecha(fecha) {
   return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
+// Obtiene la fecha directamente desde la celda A1 de la hoja activa
 function obtenerFechaMasReciente(data) {
-  var ultimaFecha = null;
-  var ultimoTiempo = -Infinity;
-
-  // CORREGIDO: Empieza en índice 3 (Fila 4)
-  for (var i = 3; i < data.length; i++) {
-    var fechaObj = convertirFecha(data[i][0]);
-    if (!fechaObj) continue;
-
-    var tiempo = fechaObj.getTime();
-    if (tiempo > ultimoTiempo) {
-      ultimoTiempo = tiempo;
-      ultimaFecha = fechaObj;
-    }
-  }
-
-  return ultimaFecha;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var valorA1 = sheet.getRange("A1").getValue();
+  return convertirFecha(valorA1);
 }
 
 function obtenerFilasFechaMasReciente(data) {
@@ -87,7 +75,7 @@ function obtenerFilasFechaMasReciente(data) {
   var claveMax = claveFecha(ultimaFecha);
   var resultado = [];
 
-  // CORREGIDO: Empieza en índice 3 (Fila 4)
+  // Asumiendo que los datos reales empiezan a partir de la fila 4 (índice 3)
   for (var i = 3; i < data.length; i++) {
     var fila = data[i];
     var fechaObj = convertirFecha(fila[0]);
@@ -101,14 +89,23 @@ function obtenerFilasFechaMasReciente(data) {
 
 function parsearPorcentaje(val) {
   if (val === null || val === undefined) return 0;
-  var str = String(val).replace("%", "").trim();
+  
+  // Si viene como número decimal de Google Sheets (ej: 0.85 para 85%)
+  if (typeof val === 'number') {
+    if (val > 0 && val <= 1) {
+      return Math.round(val * 100);
+    }
+    return Math.round(val);
+  }
+
+  var str = String(val).replace("%", "").trim().replace(",", ".");
   var num = parseFloat(str);
   if (isNaN(num)) return 0;
 
-  if (num <= 1 && num > 0) {
+  if (num > 0 && num <= 1) {
     num = num * 100;
   }
-  return Math.round(num);
+  return Math.min(100, Math.max(0, Math.round(num)));
 }
 
 // ==========================================
@@ -218,7 +215,7 @@ function obtenerMensajeMotivacional(promedio) {
 }
 
 // ==========================================
-// 4. GENERACIÓN DE PDF REESTRUCTURADO
+// 4. GENERACIÓN DE PDF CORREGIDA
 // ==========================================
 
 function generarPDFDocente(nombreDocente) {
@@ -243,14 +240,7 @@ function generarPDFDocente(nombreDocente) {
   var completadas = 0;
 
   detalles.forEach(function(d) {
-    var strVal = String(d.cumplimiento || '0').replace(/[^0-9.]/g, '').trim();
-    var numVal = parseFloat(strVal) || 0;
-
-    if (numVal <= 1 && numVal > 0) {
-      numVal = numVal * 100;
-    }
-
-    numVal = Math.min(100, Math.max(0, Math.round(numVal)));
+    var numVal = parsearPorcentaje(d.cumplimiento);
     d.cumplimientoLimpio = numVal;
 
     sumaPorcentajes += numVal;
