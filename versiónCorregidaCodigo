@@ -13,7 +13,7 @@ function abrirPanelDocentes() {
 }
 
 // ==========================================
-// 1. CONVERSIÓN Y CLAVE ÚNICA DE FECHA (DESDE A1)
+// 1. CONVERSIÓN Y FILTRADO DIRECTO DESDE A1
 // ==========================================
 
 function convertirFecha(valor) {
@@ -61,7 +61,7 @@ function claveFecha(fecha) {
   return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
-// Obtiene la fecha directamente desde la celda A1 de la hoja activa
+// Lee la fecha directamente desde la celda A1
 function obtenerFechaMasReciente(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var valorA1 = sheet.getRange("A1").getValue();
@@ -75,10 +75,11 @@ function obtenerFilasFechaMasReciente(data) {
   var claveMax = claveFecha(ultimaFecha);
   var resultado = [];
 
-  // Asumiendo que los datos reales empiezan a partir de la fila 4 (índice 3)
+  // Recorre los datos a partir de la fila 4 (índice 3)
   for (var i = 3; i < data.length; i++) {
     var fila = data[i];
     var fechaObj = convertirFecha(fila[0]);
+    
     if (fechaObj && claveFecha(fechaObj) === claveMax) {
       resultado.push(fila);
     }
@@ -90,7 +91,6 @@ function obtenerFilasFechaMasReciente(data) {
 function parsearPorcentaje(val) {
   if (val === null || val === undefined) return 0;
   
-  // Si viene como número decimal de Google Sheets (ej: 0.85 para 85%)
   if (typeof val === 'number') {
     if (val > 0 && val <= 1) {
       return Math.round(val * 100);
@@ -121,11 +121,11 @@ function obtenerListaDocentes() {
 
   for (var i = 0; i < filasRecientes.length; i++) {
     var fila = filasRecientes[i];
-    var nombreDocente = fila[3];
-    var nivel = String(fila[10] || '').trim().toLowerCase();
+    var nombreDocente = fila[3]; // Columna D (Índice 3)
+    var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K (Índice 10)
 
     if (nombreDocente && nivel !== 'sin meta asignada') {
-      docentes.add(nombreDocente);
+      docentes.add(String(nombreDocente).trim());
     }
   }
 
@@ -141,7 +141,7 @@ function obtenerDetalleDocente(nombreDocente) {
 
   for (var i = 0; i < filasRecientes.length; i++) {
     var fila = filasRecientes[i];
-    var docenteFila = fila[3];
+    var docenteFila = String(fila[3] || '').trim();
     var nivel = String(fila[10] || '').trim().toLowerCase();
 
     if (docenteFila === nombreDocente && nivel !== 'sin meta asignada') {
@@ -308,7 +308,6 @@ function generarPDFDocente(nombreDocente) {
     </head>
     <body>
       
-      <!-- Encabezado -->
       <table class="header-table">
         <tr>
           <td class="logo-cell-left">
@@ -324,7 +323,6 @@ function generarPDFDocente(nombreDocente) {
         </tr>
       </table>
 
-      <!-- KPIs Resumen Superior -->
       <table class="kpi-table">
         <tr>
           <td class="kpi-card">
@@ -342,7 +340,6 @@ function generarPDFDocente(nombreDocente) {
         </tr>
       </table>
 
-      <!-- 1. TABLA DE RESULTADOS -->
       <h3 style="font-size: 11px; color: #0f172a; margin-bottom: 6px; margin-top: 0; text-transform: uppercase;">Desglose por Materia y Grupo</h3>
       
       <table class="data-table">
@@ -381,7 +378,6 @@ function generarPDFDocente(nombreDocente) {
         </tbody>
       </table>
 
-      <!-- 2. SECCIÓN DIBIE Y MENSAJE MOTIVACIONAL -->
       <div class="dibie-container">
         <div class="dibie-row">
           <div class="dibie-label">Nivel de Desempeño DIBIE</div>
@@ -394,12 +390,10 @@ function generarPDFDocente(nombreDocente) {
         </div>
       </div>
 
-      <!-- Soporte Norma -->
       <div class="support-info">
         Por favor contacta a tu soporte en sitio o a tu consultor de formación Norma para atender cualquier novedad.
       </div>
 
-      <!-- Pie de página -->
       <div class="footer-container">
         <div class="footer-text">
           Documento oficial generado automáticamente con base en registros de cohorte: <strong>${fechaCohorte}</strong>.
