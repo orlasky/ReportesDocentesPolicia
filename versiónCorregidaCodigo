@@ -13,47 +13,27 @@ function abrirPanelDocentes() {
 }
 
 // ==========================================
-// 1. CONVERSIÓN Y FILTRADO DIRECTO DESDE A1
+// 1. MANEJO DE FECHAS Y DATOS
 // ==========================================
 
 function convertirFecha(valor) {
   if (!valor) return null;
-
   if (Object.prototype.toString.call(valor) === "[object Date]" && !isNaN(valor.getTime())) {
     return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
   }
-
   var texto = String(valor).trim();
   if (!texto) return null;
-
   var partes = texto.split(/[\/\-\.]/);
   if (partes.length !== 3) return null;
 
   var dia, mes, anio;
-
   if (partes[0].length === 4) {
-    anio = Number(partes[0]);
-    mes  = Number(partes[1]);
-    dia  = Number(partes[2]);
+    anio = Number(partes[0]); mes = Number(partes[1]); dia = Number(partes[2]);
   } else {
-    dia  = Number(partes[0]);
-    mes  = Number(partes[1]);
-    anio = Number(partes[2]);
+    dia = Number(partes[0]); mes = Number(partes[1]); anio = Number(partes[2]);
   }
-
   if (isNaN(dia) || isNaN(mes) || isNaN(anio)) return null;
-
-  var fecha = new Date(anio, mes - 1, dia);
-
-  if (
-    fecha.getFullYear() !== anio ||
-    fecha.getMonth() + 1 !== mes ||
-    fecha.getDate() !== dia
-  ) {
-    return null;
-  }
-
-  return fecha;
+  return new Date(anio, mes - 1, dia);
 }
 
 function claveFecha(fecha) {
@@ -61,11 +41,20 @@ function claveFecha(fecha) {
   return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
-// Lee la fecha directamente desde la celda A1
 function obtenerFechaMasReciente(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var valorA1 = sheet.getRange("A1").getValue();
-  return convertirFecha(valorA1);
+  var fechaA1 = convertirFecha(valorA1);
+  if (fechaA1) return fechaA1;
+
+  var maxFecha = null;
+  for (var i = 3; i < data.length; i++) {
+    var fechaObj = convertirFecha(data[i][0]);
+    if (fechaObj && (!maxFecha || fechaObj > maxFecha)) {
+      maxFecha = fechaObj;
+    }
+  }
+  return maxFecha;
 }
 
 function obtenerFilasFechaMasReciente(data) {
@@ -75,41 +64,18 @@ function obtenerFilasFechaMasReciente(data) {
   var claveMax = claveFecha(ultimaFecha);
   var resultado = [];
 
-  // Recorre los datos a partir de la fila 4 (índice 3)
   for (var i = 3; i < data.length; i++) {
     var fila = data[i];
     var fechaObj = convertirFecha(fila[0]);
-    
     if (fechaObj && claveFecha(fechaObj) === claveMax) {
       resultado.push(fila);
     }
   }
-
   return resultado;
 }
 
-function parsearPorcentaje(val) {
-  if (val === null || val === undefined) return 0;
-  
-  if (typeof val === 'number') {
-    if (val > 0 && val <= 1) {
-      return Math.round(val * 100);
-    }
-    return Math.round(val);
-  }
-
-  var str = String(val).replace("%", "").trim().replace(",", ".");
-  var num = parseFloat(str);
-  if (isNaN(num)) return 0;
-
-  if (num > 0 && num <= 1) {
-    num = num * 100;
-  }
-  return Math.min(100, Math.max(0, Math.round(num)));
-}
-
 // ==========================================
-// 2. CONSULTAS DE DATOS PARA PANEL
+// 2. CONSULTAS Y RECÁLCULO UNIVERSAL
 // ==========================================
 
 function obtenerListaDocentes() {
@@ -121,14 +87,13 @@ function obtenerListaDocentes() {
 
   for (var i = 0; i < filasRecientes.length; i++) {
     var fila = filasRecientes[i];
-    var nombreDocente = fila[3]; // Columna D (Índice 3)
-    var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K (Índice 10)
+    var nombreDocente = fila[3]; // Columna D
+    var nivel = String(fila[10] || '').trim().toLowerCase(); // Columna K
 
     if (nombreDocente && nivel !== 'sin meta asignada') {
       docentes.add(String(nombreDocente).trim());
     }
   }
-
   return Array.from(docentes).sort();
 }
 
@@ -145,24 +110,31 @@ function obtenerDetalleDocente(nombreDocente) {
     var nivel = String(fila[10] || '').trim().toLowerCase();
 
     if (docenteFila === nombreDocente && nivel !== 'sin meta asignada') {
-      var porcentaje = parsearPorcentaje(fila[12]);
+      // 1. Recálculo riguroso de Meta vs Total para TODOS los componentes
+      var metaLibro = Number(fila[14]) || 0;
+      var totalLibro = Number(fila[15]) || 0;
+      var faltaLibro = Math.max(0, metaLibro - totalLibro);
 
-      var faltaLibro = 0;
-      var faltaPropia = 0;
-      var faltaMuro = 0;
+      var metaPropia = Number(fila[17]) || 0;
+      var totalPropia = Number(fila[18]) || 0;
+      var faltaPropia = Math.max(0, metaPropia - totalPropia);
 
-      if (porcentaje < 100) {
-        var metaLibro = Number(fila[14]) || 0;
-        var totalLibro = Number(fila[15]) || 0;
-        faltaLibro = Math.max(0, metaLibro - totalLibro);
+      var metaMuro = Number(fila[20]) || 0;
+      var totalMuro = Number(fila[21]) || 0;
+      var faltaMuro = Math.max(0, metaMuro - totalMuro);
 
-        var metaPropia = Number(fila[17]) || 0;
-        var totalPropia = Number(fila[18]) || 0;
-        faltaPropia = Math.max(0, metaPropia - totalPropia);
+      // 2. Cálculo del porcentaje de cumplimiento por materia basado en los componentes reales
+      var cLibro = metaLibro > 0 ? Math.min(1, totalLibro / metaLibro) : 1;
+      var cPropia = metaPropia > 0 ? Math.min(1, totalPropia / metaPropia) : 1;
+      var cMuro = metaMuro > 0 ? Math.min(1, totalMuro / metaMuro) : 1;
 
-        var metaMuro = Number(fila[20]) || 0;
-        var totalMuro = Number(fila[21]) || 0;
-        faltaMuro = Math.max(0, metaMuro - totalMuro);
+      var totalMetas = (metaLibro > 0 ? 1 : 0) + (metaPropia > 0 ? 1 : 0) + (metaMuro > 0 ? 1 : 0);
+      var porcentajeMateria = 0;
+      
+      if (totalMetas > 0) {
+        porcentajeMateria = Math.round(((cLibro + cPropia + cMuro) / totalMetas) * 100);
+      } else {
+        porcentajeMateria = 100;
       }
 
       resultados.push({
@@ -170,7 +142,7 @@ function obtenerDetalleDocente(nombreDocente) {
         grado: fila[7] || 'N/A',
         grupo: fila[8] || 'N/A',
         materia: fila[4] || 'N/A',
-        cumplimiento: porcentaje,
+        cumplimiento: porcentajeMateria,
         faltaLibro: faltaLibro,
         faltaPropia: faltaPropia,
         faltaMuro: faltaMuro
@@ -182,11 +154,7 @@ function obtenerDetalleDocente(nombreDocente) {
 
 function enviarCorreoDocente(destinatario, asunto, mensaje) {
   try {
-    MailApp.sendEmail({
-      to: destinatario,
-      subject: asunto,
-      htmlBody: mensaje.replace(/\n/g, '<br>')
-    });
+    MailApp.sendEmail({ to: destinatario, subject: asunto, htmlBody: mensaje.replace(/\n/g, '<br>') });
     return { exito: true };
   } catch (e) {
     return { exito: false, error: e.toString() };
@@ -194,7 +162,7 @@ function enviarCorreoDocente(destinatario, asunto, mensaje) {
 }
 
 // ==========================================
-// 3. AUXILIARES DIBIE Y MENSAJES
+// 3. DIBIE Y PDF
 // ==========================================
 
 function calcularNivelDIBIE(promedio) {
@@ -214,10 +182,6 @@ function obtenerMensajeMotivacional(promedio) {
   }
 }
 
-// ==========================================
-// 4. GENERACIÓN DE PDF CORREGIDA
-// ==========================================
-
 function generarPDFDocente(nombreDocente) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
@@ -232,7 +196,6 @@ function generarPDFDocente(nombreDocente) {
   var fechaCohorte = fechaMasRecienteObj 
     ? Utilities.formatDate(fechaMasRecienteObj, Session.getScriptTimeZone(), "dd/MM/yyyy")
     : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
-
   var fechaHoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
 
   var totalMaterias = detalles.length;
@@ -240,19 +203,12 @@ function generarPDFDocente(nombreDocente) {
   var completadas = 0;
 
   detalles.forEach(function(d) {
-    var numVal = parsearPorcentaje(d.cumplimiento);
-    d.cumplimientoLimpio = numVal;
-
+    var numVal = d.cumplimiento;
     sumaPorcentajes += numVal;
-    if (numVal >= 100) {
-      completadas++;
-    }
+    if (numVal >= 100) completadas++;
   });
 
-  var promedioCumplimiento = totalMaterias > 0 
-    ? Math.round(sumaPorcentajes / totalMaterias) 
-    : 0;
-
+  var promedioCumplimiento = totalMaterias > 0 ? Math.round(sumaPorcentajes / totalMaterias) : 0;
   var dibie = calcularNivelDIBIE(promedioCumplimiento);
   var mensajeMotivacional = obtenerMensajeMotivacional(promedioCumplimiento);
 
@@ -266,82 +222,56 @@ function generarPDFDocente(nombreDocente) {
       <style>
         @page { margin: 20px; }
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #2d3748; margin: 15px; background-color: #ffffff; }
-        
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; border-bottom: 2px solid #0f172a; padding-bottom: 10px; }
         .header-table td { border: none; vertical-align: middle; }
         .logo-cell-left { width: 15%; text-align: left; }
         .logo-cell-right { width: 15%; text-align: right; }
         .title-cell { width: 70%; text-align: center; }
-        
         .header-logo { height: 55px; width: auto; max-width: 85px; object-fit: contain; }
-        .title-cell h1 { font-size: 16px; color: #0f172a; margin: 0 0 4px 0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+        .title-cell h1 { font-size: 16px; color: #0f172a; margin: 0 0 4px 0; text-transform: uppercase; font-weight: 700; }
         .title-cell p { margin: 0; color: #64748b; font-size: 10px; }
-
         .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px 0; margin-bottom: 15px; }
         .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; text-align: center; width: 33.33%; }
         .kpi-val { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 2px; }
         .kpi-lbl { font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: 600; }
-
         .data-table { width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 15px; font-size: 10px; }
         .data-table th { background-color: #0f172a; color: #ffffff; text-align: left; padding: 7px 9px; font-weight: 600; text-transform: uppercase; font-size: 9px; }
         .data-table td { padding: 7px 9px; border-bottom: 1px solid #e2e8f0; }
         .data-table tr:nth-child(even) { background-color: #f8fafc; }
-
         .badge { padding: 2px 6px; border-radius: 8px; font-size: 9px; font-weight: 700; text-align: center; display: inline-block; }
         .badge-success { background-color: #d1e7dd; color: #0f5132; }
         .badge-warning { background-color: #fff3cd; color: #664d03; }
-
         .dibie-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-top: 10px; margin-bottom: 15px; }
         .dibie-row { display: table; width: 100%; margin-bottom: 8px; }
         .dibie-label { display: table-cell; vertical-align: middle; font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; }
         .dibie-badge-cell { display: table-cell; vertical-align: middle; text-align: right; }
         .dibie-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-weight: 700; font-size: 11px; color: ${dibie.color}; background-color: ${dibie.bg}; }
-
-        .message-box { background: #ffffff; border-left: 4px solid #2563eb; padding: 10px 12px; border-radius: 4px; font-size: 10px; color: #1e293b; line-height: 1.4; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
-
+        .message-box { background: #ffffff; border-left: 4px solid #2563eb; padding: 10px 12px; border-radius: 4px; font-size: 10px; color: #1e293b; line-height: 1.4; border: 1px solid #e2e8f0; }
         .support-info { margin-top: 12px; font-size: 9.5px; color: #475569; text-align: center; font-style: italic; background-color: #fafafa; padding: 6px; border-radius: 4px; border: 1px dashed #cbd5e1; }
-        
         .footer-container { margin-top: 18px; border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center; }
         .footer-text { font-size: 9px; color: #94a3b8; margin-bottom: 8px; }
-        .footer-iframe { width: 100%; max-width: 640px; height: 100px; border: none; overflow: hidden; display: block; margin: 0 auto; }
+        .footer-iframe { width: 100%; max-width: 640px; height: 100px; border: none; display: block; margin: 0 auto; }
       </style>
     </head>
     <body>
-      
       <table class="header-table">
         <tr>
-          <td class="logo-cell-left">
-            <img src="${logo1}" class="header-logo" alt="Logo 1" />
-          </td>
+          <td class="logo-cell-left"><img src="${logo1}" class="header-logo" alt="Logo 1" /></td>
           <td class="title-cell">
             <h1>Informe de Cumplimiento Docente</h1>
             <p><strong>Docente:</strong> ${nombreDocente} &nbsp;|&nbsp; <strong>Emisión:</strong> ${fechaHoy}</p>
           </td>
-          <td class="logo-cell-right">
-            <img src="${logo2}" class="header-logo" alt="Logo 2" />
-          </td>
+          <td class="logo-cell-right"><img src="${logo2}" class="header-logo" alt="Logo 2" /></td>
         </tr>
       </table>
-
       <table class="kpi-table">
         <tr>
-          <td class="kpi-card">
-            <div class="kpi-lbl">Asignaturas Evaluadas</div>
-            <div class="kpi-val">${totalMaterias}</div>
-          </td>
-          <td class="kpi-card">
-            <div class="kpi-lbl">Cumplimiento Global</div>
-            <div class="kpi-val">${promedioCumplimiento}%</div>
-          </td>
-          <td class="kpi-card">
-            <div class="kpi-lbl">Metas Alcanzadas</div>
-            <div class="kpi-val">${completadas} de ${totalMaterias}</div>
-          </td>
+          <td class="kpi-card"><div class="kpi-lbl">Asignaturas Evaluadas</div><div class="kpi-val">${totalMaterias}</div></td>
+          <td class="kpi-card"><div class="kpi-lbl">Cumplimiento Global</div><div class="kpi-val">${promedioCumplimiento}%</div></td>
+          <td class="kpi-card"><div class="kpi-lbl">Metas Alcanzadas</div><div class="kpi-val">${completadas} de ${totalMaterias}</div></td>
         </tr>
       </table>
-
-      <h3 style="font-size: 11px; color: #0f172a; margin-bottom: 6px; margin-top: 0; text-transform: uppercase;">Desglose por Materia y Grupo</h3>
-      
+      <h3 style="font-size: 11px; color: #0f172a; margin-bottom: 6px; text-transform: uppercase;">Desglose por Materia y Grupo</h3>
       <table class="data-table">
         <thead>
           <tr>
@@ -355,13 +285,10 @@ function generarPDFDocente(nombreDocente) {
   `;
 
   detalles.forEach(function(d) {
-    var valMostrar = d.cumplimientoLimpio;
-    var estadoBadge = valMostrar >= 100 
-      ? `<span class="badge badge-success">100% Ok</span>`
-      : `<span class="badge badge-warning">${valMostrar}%</span>`;
-
-    var faltantesTexto = valMostrar >= 100 
-      ? '<em style="color:#2563eb;">Al día</em>'
+    var valMostrar = d.cumplimiento;
+    var estadoBadge = valMostrar >= 100 ? `<span class="badge badge-success">100% Ok</span>` : `<span class="badge badge-warning">${valMostrar}%</span>`;
+    var faltantesTexto = (d.faltaLibro === 0 && d.faltaPropia === 0 && d.faltaMuro === 0) 
+      ? '<em style="color:#2563eb;">Al día</em>' 
       : `Libro: <strong>${d.faltaLibro}</strong> | Propia: <strong>${d.faltaPropia}</strong> | Muro: <strong>${d.faltaMuro}</strong>`;
 
     html += `
@@ -377,28 +304,17 @@ function generarPDFDocente(nombreDocente) {
   html += `
         </tbody>
       </table>
-
       <div class="dibie-container">
         <div class="dibie-row">
           <div class="dibie-label">Nivel de Desempeño DIBIE</div>
-          <div class="dibie-badge-cell">
-            <span class="dibie-badge">${dibie.nombre}</span>
-          </div>
+          <div class="dibie-badge-cell"><span class="dibie-badge">${dibie.nombre}</span></div>
         </div>
-        <div class="message-box">
-          ${mensajeMotivacional}
-        </div>
+        <div class="message-box">${mensajeMotivacional}</div>
       </div>
-
-      <div class="support-info">
-        Por favor contacta a tu soporte en sitio o a tu consultor de formación Norma para atender cualquier novedad.
-      </div>
-
+      <div class="support-info">Por favor contacta a tu soporte en sitio o a tu consultor de formación Norma para atender cualquier novedad.</div>
       <div class="footer-container">
-        <div class="footer-text">
-          Documento oficial generado automáticamente con base en registros de cohorte: <strong>${fechaCohorte}</strong>.
-        </div>
-        <iframe src="https://co.edicionesnorma.com/wp-content/uploads/2025/05/somomas-480x122.png" class="footer-iframe" scrolling="no" frameborder="0" allowfullscreen title="0"></iframe>
+        <div class="footer-text">Documento oficial generado automáticamente con base en registros de cohorte: <strong>${fechaCohorte}</strong>.</div>
+        <iframe src="https://co.edicionesnorma.com/wp-content/uploads/2025/05/somomas-480x122.png" class="footer-iframe" scrolling="no" frameborder="0"></iframe>
       </div>
     </body>
     </html>
@@ -406,29 +322,19 @@ function generarPDFDocente(nombreDocente) {
 
   var blob = HtmlService.createHtmlOutput(html).getAs('application/pdf');
   blob.setName('Reporte_' + nombreDocente.replace(/\s+/g, '_') + '.pdf');
-
-  return {
-    base64: Utilities.base64Encode(blob.getBytes()),
-    filename: blob.getName()
-  };
+  return { base64: Utilities.base64Encode(blob.getBytes()), filename: blob.getName() };
 }
 
 function obtenerTodosLosPDFs() {
   var docentes = obtenerListaDocentes();
   var resultados = [];
-
   for (var i = 0; i < docentes.length; i++) {
     try {
       var pdfData = generarPDFDocente(docentes[i]);
-      resultados.push({
-        docente: docentes[i],
-        filename: pdfData.filename,
-        base64: pdfData.base64
-      });
+      resultados.push({ docente: docentes[i], filename: pdfData.filename, base64: pdfData.base64 });
     } catch (e) {
-      Logger.log("Error al generar PDF para: " + docentes[i] + " - " + e.toString());
+      Logger.log("Error PDF para " + docentes[i] + ": " + e.toString());
     }
   }
-
   return resultados;
 }
