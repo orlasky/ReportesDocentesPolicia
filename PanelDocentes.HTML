@@ -89,14 +89,29 @@
 
     <script>
       window.onload = function() {
+        console.log("Iniciando solicitud de lista de docentes...");
         google.script.run
           .withSuccessHandler(llenarSelect)
+          .withFailureHandler(function(err) {
+            console.error("Error crítico al cargar docentes:", err);
+            var select = document.getElementById('selectDocentes');
+            select.innerHTML = '<option value="">Error al cargar: ' + err.message + '</option>';
+          })
           .obtenerListaDocentes();
       };
 
       function llenarSelect(docentes) {
         var select = document.getElementById('selectDocentes');
         select.innerHTML = '<option value="">-- Seleccionar Docente --</option>';
+        
+        if (!docentes || docentes.length === 0) {
+          var opt = document.createElement('option');
+          opt.value = "";
+          opt.textContent = "No hay docentes para la fecha en A1";
+          select.appendChild(opt);
+          return;
+        }
+
         docentes.forEach(function(d) {
           var opt = document.createElement('option');
           opt.value = d;
@@ -118,23 +133,23 @@
         mostrarLoader(true);
         google.script.run
           .withSuccessHandler(function(detalles) {
-            if (detalles.length === 0) {
+            if (!detalles || detalles.length === 0) {
               alert('No se encontraron registros para el docente.');
               mostrarLoader(false);
               return;
             }
 
-            var mensaje = `Estimado(a) ${docente},\n\nA continuación compartimos el resumen de su cumplimiento más reciente:\n\n`;
+            var mensaje = "Estimado(a) " + docente + ",\n\nA continuación compartimos el resumen de su cumplimiento más reciente:\n\n";
             
             detalles.forEach(function(d) {
-              mensaje += `• Materia: ${d.materia} (${d.grado} - ${d.grupo})\n`;
-              mensaje += `  Cumplimiento: ${d.cumplimiento}%\n`;
+              mensaje += "• Materia: " + d.materia + " (" + d.grado + " - " + d.grupo + ")\n";
+              mensaje += "  Cumplimiento: " + d.cumplimiento + "%\n";
               if (d.cumplimiento < 100) {
-                mensaje += `  Pendientes -> Libro: ${d.faltaLibro} | Propia: ${d.faltaPropia} | Muro: ${d.faltaMuro}\n`;
+                mensaje += "  Pendientes -> Libro: " + d.faltaLibro + " | Propia: " + d.faltaPropia + " | Muro: " + d.faltaMuro + "\n";
               } else {
-                mensaje += `  ¡Felicidades, meta completada!\n`;
+                mensaje += "  ¡Felicidades, meta completada!\n";
               }
-              mensaje += `\n`;
+              mensaje += "\n";
             });
 
             google.script.run
@@ -146,8 +161,16 @@
                   alert('Error al enviar correo: ' + res.error);
                 }
               })
+              .withFailureHandler(function(err) {
+                mostrarLoader(false);
+                alert('Error al enviar correo: ' + err.message);
+              })
               .enviarCorreoDocente(docente, 'Resumen de Cumplimiento Docente', mensaje);
 
+          })
+          .withFailureHandler(function(err) {
+            mostrarLoader(false);
+            alert('Error al obtener detalles: ' + err.message);
           })
           .obtenerDetalleDocente(docente);
       }
